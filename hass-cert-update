@@ -32,27 +32,32 @@ cert_renewal(){
     # And copy file from Nginx Proxy Manager container
     # to Home Assistant container
 
-    HOME_ASSISTANT_CONTAINER_CONFIG_PATH='/config'
+    HASS_CONTAINER_CONFIG_PATH='/config'
     NGINX_PROXY_MANAGER_CONTAINER_CERT_PATH='/etc/letsencrypt/archive/npm-7'
 
-    CURRENT_DATE=$(date +%s)
-
-    CERT_EXPIRATION_DATE=$(echo -n Q | \
+    ONLINE_CERT_EXPIRATION_DATE=$(echo -n Q | \
         openssl s_client -servername "${HOST}" -connect "${HOST}":443 2>/dev/null | \
         openssl x509 -noout -dates 2>/dev/null | \
         grep notAfter | \
         awk -F= '{ print $2 }' | \
         { read -r human_date ; if [[ $human_date ]] ; then date -d "$human_date" +%s ; else echo "invalid host" ; fi ; })
 
+    # Testing if a valida host was passed in the command line argument
     RE='^[0-9]+$'
-    if ! [[ "${CERT_EXPIRATION_DATE}" =~ $RE ]] ; then
-        usage "$CERT_EXPIRATION_DATE"
+    if ! [[ "${ONLINE_CERT_EXPIRATION_DATE}" =~ $RE ]] ; then
+        usage "$ONLINE_CERT_EXPIRATION_DATE"
     fi
 
-    if [[ ${CURRENT_DATE} -gt ${CERT_EXPIRATION_DATE} ]]; then
-        HOME_ASSISTANT_CONTAINER=$(docker ps | \
+    HASS_CONTAINER=$(docker ps | \
             grep home-assistant  | \
             awk '{ print $1 }')
+    docker cp --quiet "${HASS_CONTAINER}:/config/fullchain.pem" .
+    HASS_CERT_EXPIRATION_DATE=$(openssl x509 -in fullchain.pem -noout -dates 2>/dev/null | \
+        grep notAfter | \
+        awk -F= '{ print $2 }' | \
+        { read -r human_date ; date -d "$human_date" +%s ; })
+
+    if [[ ${ONLINE_CERT_EXPIRATION_DATE} -ne ${HASS_CERT_EXPIRATION_DATE} ]]; then
 
         NGINX_PROXY_MANAGER_CONTAINER=$(docker ps | \
             grep nginx-proxy-manager | \
@@ -64,12 +69,13 @@ cert_renewal(){
             awk '{ print $NF }')
 
         for i in ${NEWEST_FILES[@]}; do
-            DEST_FILE=$(echo $i | sed 's/[0-9]\{1,\}//')
+            DEST_FILE=$(echo "$i" | sed 's/[0-9]\{1,\}//')
             docker cp --quiet "${NGINX_PROXY_MANAGER_CONTAINER}:${NGINX_PROXY_MANAGER_CONTAINER_CERT_PATH}/${i}" .
-            docker cp --quiet "${i}" "${HOME_ASSISTANT_CONTAINER}:${HOME_ASSISTANT_CONTAINER_CONFIG_PATH}/${DEST_FILE}"
+            docker cp --quiet "${i}" "${HASS_CONTAINER}:${HASS_CONTAINER_CONFIG_PATH}/${DEST_FILE}"
+            rm -f "${i}"
         done
     fi
-
+    rm -f fullchain.pem
 }
 
 #[ Dealing with commandline options ]------------------------------------------#

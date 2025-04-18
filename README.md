@@ -61,8 +61,9 @@ To set up the cron job:
 
 ## How It Works
 
-1. The script checks the SSL certificate expiration date for the specified host
-2. If the certificate has expired, it:
+1. The script downloads the current certificate from the Home Assistant container
+2. It compares the expiration date of the Home Assistant certificate with the online certificate from Nginx Proxy Manager
+3. If the certificates have different expiration dates, it:
    - Identifies the Home Assistant and Nginx Proxy Manager containers
    - Copies the latest certificate files from Nginx Proxy Manager to Home Assistant
    - Updates the certificate files in the Home Assistant container
