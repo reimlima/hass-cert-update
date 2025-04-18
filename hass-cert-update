@@ -51,8 +51,8 @@ cert_renewal(){
     HASS_CONTAINER=$(docker ps | \
             grep home-assistant  | \
             awk '{ print $1 }')
-    docker cp --quiet "${HASS_CONTAINER}:/config/fullchain.pem" .
-    HASS_CERT_EXPIRATION_DATE=$(openssl x509 -in fullchain.pem -noout -dates 2>/dev/null | \
+    docker cp --quiet "${HASS_CONTAINER}:/config/fullchain.pem" /tmp
+    HASS_CERT_EXPIRATION_DATE=$(openssl x509 -in /tmp/fullchain.pem -noout -dates 2>/dev/null | \
         grep notAfter | \
         awk -F= '{ print $2 }' | \
         { read -r human_date ; date -d "$human_date" +%s ; })
@@ -70,12 +70,12 @@ cert_renewal(){
 
         for i in ${NEWEST_FILES[@]}; do
             DEST_FILE=$(echo "$i" | sed 's/[0-9]\{1,\}//')
-            docker cp --quiet "${NGINX_PROXY_MANAGER_CONTAINER}:${NGINX_PROXY_MANAGER_CONTAINER_CERT_PATH}/${i}" .
-            docker cp --quiet "${i}" "${HASS_CONTAINER}:${HASS_CONTAINER_CONFIG_PATH}/${DEST_FILE}"
-            rm -f "${i}"
+            docker cp --quiet "${NGINX_PROXY_MANAGER_CONTAINER}:${NGINX_PROXY_MANAGER_CONTAINER_CERT_PATH}/${i}" /tmp
+            docker cp --quiet "/tmp/${i}" "${HASS_CONTAINER}:${HASS_CONTAINER_CONFIG_PATH}/${DEST_FILE}"
+            rm -f "/tmp/${i}"
         done
     fi
-    rm -f fullchain.pem
+    rm -f /tmp/fullchain.pem
 }
 
 #[ Dealing with commandline options ]------------------------------------------#
